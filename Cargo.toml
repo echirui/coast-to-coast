@@ -1,6 +1,8 @@
 [package]
 name = "coast-to-coast"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+bevy = "0.14"
+bevy_mod_raycast = "0.18.0"
