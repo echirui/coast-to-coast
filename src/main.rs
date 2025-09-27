@@ -21,8 +21,9 @@ struct SelectedCell {
 }
 
 #[derive(Resource, Default)]
-struct PanState {
+struct CameraState {
     is_panning: bool,
+    is_rotating: bool,
     last_position: Option<Vec2>,
 }
 
@@ -31,9 +32,9 @@ fn main() {
         .add_plugins((DefaultPlugins, bevy_mod_raycast::deferred::DeferredRaycastingPlugin::<MyRaycastSet>::default()))
         .insert_resource(Game::new())
         .insert_resource(SelectedCell::default())
-        .insert_resource(PanState::default())
+        .insert_resource(CameraState::default())
         .add_systems(Startup, (setup_camera, spawn_board_base))
-        .add_systems(Update, (sync_board_with_game, handle_input, handle_camera_pan))
+        .add_systems(Update, (sync_board_with_game, handle_input, handle_camera_movement))
         .run();
 }
 
@@ -157,36 +158,59 @@ fn handle_input(
     }
 }
 
-fn handle_camera_pan(
-    mut pan_state: ResMut<PanState>,
+fn handle_camera_movement(
+    mut camera_state: ResMut<CameraState>,
     mouse_button_input: Res<ButtonInput<MouseButton>>,
     mut cursor_moved_events: EventReader<CursorMoved>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
+    // Panning
     if mouse_button_input.pressed(MouseButton::Middle) {
-        if !pan_state.is_panning {
-            pan_state.is_panning = true;
-            pan_state.last_position = None; // Reset on new pan
+        if !camera_state.is_panning {
+            camera_state.is_panning = true;
+            camera_state.last_position = None;
         }
 
-        if let Some(last_pos) = pan_state.last_position {
+        if let Some(last_pos) = camera_state.last_position {
             if let Some(cursor_moved) = cursor_moved_events.read().last() {
                 let delta = cursor_moved.position - last_pos;
                 let mut transform = camera_query.single_mut();
 
-                // Adjust sensitivity as needed
                 let sensitivity = 0.01;
                 transform.translation.x -= delta.x * sensitivity;
-                transform.translation.z += delta.y * sensitivity; // Note: Y cursor movement affects Z translation
+                transform.translation.z += delta.y * sensitivity;
             }
         }
+    } else {
+        camera_state.is_panning = false;
+    }
 
-        if let Some(cursor_moved) = cursor_moved_events.read().last() {
-            pan_state.last_position = Some(cursor_moved.position);
+    // Rotating
+    if mouse_button_input.pressed(MouseButton::Right) {
+        if !camera_state.is_rotating {
+            camera_state.is_rotating = true;
+            camera_state.last_position = None;
         }
 
+        if let Some(last_pos) = camera_state.last_position {
+            if let Some(cursor_moved) = cursor_moved_events.read().last() {
+                let delta = cursor_moved.position - last_pos;
+                let mut transform = camera_query.single_mut();
+
+                let sensitivity = 0.005;
+                transform.rotate_around(Vec3::ZERO, Quat::from_rotation_y(delta.x * sensitivity));
+            }
+        }
     } else {
-        pan_state.is_panning = false;
-        pan_state.last_position = None;
+        camera_state.is_rotating = false;
+    }
+
+    // Update last position
+    if mouse_button_input.any_pressed([MouseButton::Middle, MouseButton::Right]) {
+         if let Some(cursor_moved) = cursor_moved_events.read().last() {
+            camera_state.last_position = Some(cursor_moved.position);
+        }
+    } else {
+        camera_state.last_position = None;
     }
 }
