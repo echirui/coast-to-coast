@@ -20,13 +20,20 @@ struct SelectedCell {
     pos: Option<(u32, u32)>,
 }
 
+#[derive(Resource, Default)]
+struct PanState {
+    is_panning: bool,
+    last_position: Option<Vec2>,
+}
+
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, bevy_mod_raycast::deferred::DeferredRaycastingPlugin::<MyRaycastSet>::default()))
         .insert_resource(Game::new())
         .insert_resource(SelectedCell::default())
+        .insert_resource(PanState::default())
         .add_systems(Startup, (setup_camera, spawn_board_base))
-        .add_systems(Update, (sync_board_with_game, handle_input))
+        .add_systems(Update, (sync_board_with_game, handle_input, handle_camera_pan))
         .run();
 }
 
@@ -147,5 +154,39 @@ fn handle_input(
                 }
             }
         }
+    }
+}
+
+fn handle_camera_pan(
+    mut pan_state: ResMut<PanState>,
+    mouse_button_input: Res<ButtonInput<MouseButton>>,
+    mut cursor_moved_events: EventReader<CursorMoved>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+) {
+    if mouse_button_input.pressed(MouseButton::Middle) {
+        if !pan_state.is_panning {
+            pan_state.is_panning = true;
+            pan_state.last_position = None; // Reset on new pan
+        }
+
+        if let Some(last_pos) = pan_state.last_position {
+            if let Some(cursor_moved) = cursor_moved_events.read().last() {
+                let delta = cursor_moved.position - last_pos;
+                let mut transform = camera_query.single_mut();
+
+                // Adjust sensitivity as needed
+                let sensitivity = 0.01;
+                transform.translation.x -= delta.x * sensitivity;
+                transform.translation.z += delta.y * sensitivity; // Note: Y cursor movement affects Z translation
+            }
+        }
+
+        if let Some(cursor_moved) = cursor_moved_events.read().last() {
+            pan_state.last_position = Some(cursor_moved.position);
+        }
+
+    } else {
+        pan_state.is_panning = false;
+        pan_state.last_position = None;
     }
 }
