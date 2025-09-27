@@ -20,21 +20,24 @@ struct SelectedCell {
     pos: Option<(u32, u32)>,
 }
 
-#[derive(Resource, Default)]
-struct CameraState {
-    is_panning: bool,
-    is_rotating: bool,
-    last_position: Option<Vec2>,
+#[derive(Component, Clone, Copy)]
+enum RotationDirection {
+    Left,
+    Right,
 }
+
+#[derive(Event)]
+struct RotateCameraEvent(RotationDirection);
+
 
 fn main() {
     App::new()
         .add_plugins((DefaultPlugins, bevy_mod_raycast::deferred::DeferredRaycastingPlugin::<MyRaycastSet>::default()))
+        .add_event::<RotateCameraEvent>()
         .insert_resource(Game::new())
         .insert_resource(SelectedCell::default())
-        .insert_resource(CameraState::default())
-        .add_systems(Startup, (setup_camera, spawn_board_base))
-        .add_systems(Update, (sync_board_with_game, handle_input, handle_camera_movement))
+        .add_systems(Startup, (setup_camera, spawn_board_base, setup_ui))
+        .add_systems(Update, (sync_board_with_game, handle_input, handle_button_clicks, rotate_camera))
         .run();
 }
 
@@ -158,59 +161,95 @@ fn handle_input(
     }
 }
 
-fn handle_camera_movement(
-    mut camera_state: ResMut<CameraState>,
-    mouse_button_input: Res<ButtonInput<MouseButton>>,
-    mut cursor_moved_events: EventReader<CursorMoved>,
+fn setup_ui(mut commands: Commands) {
+    commands.spawn(NodeBundle {
+        style: Style {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            justify_content: JustifyContent::SpaceBetween,
+            ..default()
+        },
+        ..default()
+    }).with_children(|parent| {
+        // Left Button
+        parent.spawn(ButtonBundle {
+            style: Style {
+                width: Val::Px(150.0),
+                height: Val::Px(65.0),
+                border: UiRect::all(Val::Px(5.0)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            border_color: BorderColor(Color::BLACK),
+            background_color: Color::srgb(0.15, 0.15, 0.15).into(),
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Rotate Left",
+                TextStyle {
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ));
+        }).insert(RotationDirection::Left);
+
+        // Right Button
+        parent.spawn(ButtonBundle {
+            style: Style {
+                width: Val::Px(150.0),
+                height: Val::Px(65.0),
+                border: UiRect::all(Val::Px(5.0)),
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                ..default()
+            },
+            border_color: BorderColor(Color::BLACK),
+            background_color: Color::srgb(0.15, 0.15, 0.15).into(),
+            ..default()
+        })
+        .with_children(|parent| {
+            parent.spawn(TextBundle::from_section(
+                "Rotate Right",
+                TextStyle {
+                    font_size: 20.0,
+                    color: Color::WHITE,
+                    ..default()
+                },
+            ));
+        }).insert(RotationDirection::Right);
+    });
+}
+
+fn handle_button_clicks(
+    mut interaction_query: Query<(
+        &Interaction,
+        &RotationDirection
+    ), (
+        Changed<Interaction>,
+        With<Button>
+    )>,
+    mut rotate_camera_events: EventWriter<RotateCameraEvent>,
+) {
+    for (interaction, direction) in &mut interaction_query {
+        if *interaction == Interaction::Pressed {
+            rotate_camera_events.send(RotateCameraEvent(*direction));
+        }
+    }
+}
+
+fn rotate_camera(
+    mut events: EventReader<RotateCameraEvent>,
     mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
-    // Panning
-    if mouse_button_input.pressed(MouseButton::Middle) {
-        if !camera_state.is_panning {
-            camera_state.is_panning = true;
-            camera_state.last_position = None;
-        }
-
-        if let Some(last_pos) = camera_state.last_position {
-            if let Some(cursor_moved) = cursor_moved_events.read().last() {
-                let delta = cursor_moved.position - last_pos;
-                let mut transform = camera_query.single_mut();
-
-                let sensitivity = 0.01;
-                transform.translation.x -= delta.x * sensitivity;
-                transform.translation.z += delta.y * sensitivity;
-            }
-        }
-    } else {
-        camera_state.is_panning = false;
-    }
-
-    // Rotating
-    if mouse_button_input.pressed(MouseButton::Right) {
-        if !camera_state.is_rotating {
-            camera_state.is_rotating = true;
-            camera_state.last_position = None;
-        }
-
-        if let Some(last_pos) = camera_state.last_position {
-            if let Some(cursor_moved) = cursor_moved_events.read().last() {
-                let delta = cursor_moved.position - last_pos;
-                let mut transform = camera_query.single_mut();
-
-                let sensitivity = 0.005;
-                transform.rotate_around(Vec3::ZERO, Quat::from_rotation_y(delta.x * sensitivity));
-            }
-        }
-    } else {
-        camera_state.is_rotating = false;
-    }
-
-    // Update last position
-    if mouse_button_input.any_pressed([MouseButton::Middle, MouseButton::Right]) {
-         if let Some(cursor_moved) = cursor_moved_events.read().last() {
-            camera_state.last_position = Some(cursor_moved.position);
-        }
-    } else {
-        camera_state.last_position = None;
+    for event in events.read() {
+        let mut transform = camera_query.single_mut();
+        let angle = match event.0 {
+            RotationDirection::Left => -0.1,
+            RotationDirection::Right => 0.1,
+        };
+        transform.rotate_around(Vec3::ZERO, Quat::from_rotation_y(angle));
     }
 }
