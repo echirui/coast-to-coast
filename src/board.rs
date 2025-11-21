@@ -9,8 +9,8 @@ pub enum CellState {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Hex {
-    q: i32,
-    r: i32,
+    pub q: i32,
+    pub r: i32,
 }
 
 impl Hex {
@@ -34,11 +34,9 @@ pub struct Board {
 impl Board {
     pub fn new(size: i32) -> Self {
         let mut cells = HashMap::new();
-        for q in -size..=size {
-            for r in -size..=size {
-                if q + r <= size && q + r >= -size {
-                    cells.insert(Hex { q, r }, CellState::Empty);
-                }
+        for q in 0..size {
+            for r in 0..size {
+                cells.insert(Hex { q, r }, CellState::Empty);
             }
         }
         Board { cells, size }
