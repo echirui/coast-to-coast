@@ -1,11 +1,19 @@
 use eframe::{self, egui};
 
+const DEFAULT_WINDOW_WIDTH: f32 = 800.0;
+const DEFAULT_WINDOW_HEIGHT: f32 = 600.0;
+const BOARD_AREA_SIZE: f32 = 500.0;
+const X_OFFSET_ADJUSTMENT: f32 = 150.0;
+const STROKE_THICKNESS: f32 = 1.0;
+const HEX_ANGLE_INCREMENT: f32 = 60.0;
+
 mod board;
 mod game;
+use game::HEX_DRAW_SIZE;
 
 fn main() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default().with_inner_size([800.0, 600.0]),
+        viewport: egui::ViewportBuilder::default().with_inner_size([DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT]),
         ..Default::default()
     };
     eframe::run_native(
@@ -38,7 +46,7 @@ impl eframe::App for MyApp {
         let mut max_x = f32::MIN;
         let mut min_y = f32::MAX;
         let mut max_y = f32::MIN;
-        let size = 20.0;
+        let size = HEX_DRAW_SIZE;
 
         for (hex, _state) in &self.game.board.cells {
             let (px, py) = self.hex_to_pixel(*hex, size);
@@ -49,8 +57,8 @@ impl eframe::App for MyApp {
             max_y = max_y.max(final_py);
         }
 
-        self.x_offset = (500.0 - (max_x - min_x)) / 2.0 - min_x + 150.0;
-        self.y_offset = (500.0 - (max_y - min_y)) / 2.0 - min_y;
+        self.x_offset = (BOARD_AREA_SIZE - (max_x - min_x)) / 2.0 - min_x + X_OFFSET_ADJUSTMENT;
+        self.y_offset = (BOARD_AREA_SIZE - (max_y - min_y)) / 2.0 - min_y;
 
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Hex Game");
@@ -74,9 +82,9 @@ impl eframe::App for MyApp {
 
 impl MyApp {
     fn render_board(&mut self, ui: &mut egui::Ui) {
-        let (_rect, response) = ui.allocate_exact_size(egui::Vec2::new(500.0, 500.0), egui::Sense::click());
+        let (_rect, response) = ui.allocate_exact_size(egui::Vec2::new(BOARD_AREA_SIZE, BOARD_AREA_SIZE), egui::Sense::click());
         let painter = ui.painter();
-        let size = 20.0;
+        let size = HEX_DRAW_SIZE;
 
         for (hex, state) in &self.game.board.cells {
             let (px, py) = self.hex_to_pixel(*hex, size);
@@ -91,14 +99,14 @@ impl MyApp {
 
             let points: Vec<egui::Pos2> = (0..6)
                 .map(|i| {
-                    let angle = (60.0 * i as f32).to_radians();
+                    let angle = (HEX_ANGLE_INCREMENT * i as f32).to_radians();
                     let x = center.x + size * angle.cos();
                     let y = center.y + size * angle.sin();
                     egui::pos2(x, y)
                 })
                 .collect();
             
-            painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::new(1.0, egui::Color32::BLACK)));
+            painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::new(STROKE_THICKNESS, egui::Color32::BLACK)));
         }
 
         if response.clicked() {

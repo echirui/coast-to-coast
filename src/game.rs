@@ -2,6 +2,9 @@
 use std::collections::{HashSet, VecDeque};
 use crate::board::{Board, CellState, Hex};
 
+const DEFAULT_BOARD_SIZE: i32 = 11;
+pub const HEX_DRAW_SIZE: f32 = 20.0;
+
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum GameState {
     InProgress,
@@ -17,7 +20,7 @@ pub struct Game {
 impl Game {
     pub fn new() -> Self {
         Self {
-            board: Board::new(11),
+            board: Board::new(DEFAULT_BOARD_SIZE),
             current_player: CellState::Red,
             state: GameState::InProgress,
         }
