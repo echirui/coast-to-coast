@@ -1,0 +1,10 @@
+[package]
+name = "coast-to-coast"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gpui = "0.2.2"
+gpui-component = "0.4.0-preview1"
+anyhow = "1.0"
+sysinfo = "0.37.2"
