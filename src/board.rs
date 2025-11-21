@@ -1,13 +1,15 @@
 use std::collections::HashMap;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CellState {
     Empty,
     Red,
     Blue,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Hex {
     pub q: i32,
     pub r: i32,
@@ -120,6 +122,18 @@ impl Board {
         false
     }
 
+    pub fn calculate_hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.size.hash(&mut hasher);
+        // HashMapの要素の順序は保証されないため、ソートしてからハッシュ化
+        let mut cells_vec: Vec<(&Hex, &CellState)> = self.cells.iter().collect();
+        cells_vec.sort_by_key(|(hex, _)| *hex); // HexがOrdを実装していないが、PartialOrd + Eqでソート可能
+        for (hex, state) in cells_vec {
+            hex.hash(&mut hasher);
+            state.hash(&mut hasher);
+        }
+        hasher.finish()
+    }
 }
 
 #[cfg(test)]

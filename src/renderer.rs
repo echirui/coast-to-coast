@@ -16,6 +16,7 @@ pub struct BoardRenderer {
     empty_texture: egui::TextureHandle,
     red_texture: egui::TextureHandle,
     blue_texture: egui::TextureHandle,
+    last_board_hash: u64, // Add last_board_hash
 }
 
 impl BoardRenderer {
@@ -26,6 +27,7 @@ impl BoardRenderer {
             empty_texture: Self::load_svg(ctx, include_bytes!("../assets/hexagon_empty.svg"), "hexagon_empty"),
             red_texture: Self::load_svg(ctx, include_bytes!("../assets/hexagon_red.svg"), "hexagon_red"),
             blue_texture: Self::load_svg(ctx, include_bytes!("../assets/hexagon_blue.svg"), "hexagon_blue"),
+            last_board_hash: 0, // Initialize last_board_hash
         }
     }
 
@@ -52,6 +54,12 @@ impl BoardRenderer {
     }
 
     pub fn calculate_offsets(&mut self, board: &board::Board) {
+        let current_board_hash = board.calculate_hash();
+        if self.last_board_hash == current_board_hash {
+            return; // ボードの状態が変わっていなければ再計算しない
+        }
+        self.last_board_hash = current_board_hash;
+
         let mut min_x = f32::MAX;
         let mut max_x = f32::MIN;
         let mut min_y = f32::MAX;
