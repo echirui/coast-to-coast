@@ -1,186 +1,145 @@
-use eframe::egui::{self, Sense, Ui};
-use crate::board::{self, Hex};
+use eframe::egui::{self, Context, Ui};
+use crate::board::{Board, CellState, Hex};
 use crate::game::{Game, HEX_DRAW_SIZE};
+use std::f32::consts::PI;
 
-use resvg::{self, usvg::Tree, usvg::Transform};
-use usvg::Options;
-use tiny_skia::Pixmap;
-use fontdb::Database;
-
-const BOARD_AREA_SIZE: f32 = 500.0;
-const X_OFFSET_ADJUSTMENT: f32 = 150.0;
+const SQRT_3: f32 = 1.7320508; // Approximately sqrt(3)
 
 pub struct BoardRenderer {
+    hex_size: f32, // Corresponds to HEX_DRAW_SIZE
     x_offset: f32,
     y_offset: f32,
-    empty_texture: egui::TextureHandle,
-    red_texture: egui::TextureHandle,
-    blue_texture: egui::TextureHandle,
-    last_board_hash: u64, // Add last_board_hash
+    hex_spacing: f32,
+    pixels_per_hex_row: f32,
 }
 
 impl BoardRenderer {
-    pub fn new(ctx: &egui::Context) -> Self {
+    pub fn new(_cc: &Context) -> Self {
         Self {
+            hex_size: HEX_DRAW_SIZE,
             x_offset: 0.0,
             y_offset: 0.0,
-            empty_texture: Self::load_svg(ctx, include_bytes!("../assets/hexagon_empty.svg"), "hexagon_empty"),
-            red_texture: Self::load_svg(ctx, include_bytes!("../assets/hexagon_red.svg"), "hexagon_red"),
-            blue_texture: Self::load_svg(ctx, include_bytes!("../assets/hexagon_blue.svg"), "hexagon_blue"),
-            last_board_hash: 0, // Initialize last_board_hash
+            hex_spacing: HEX_DRAW_SIZE * 1.5,
+            pixels_per_hex_row: HEX_DRAW_SIZE * SQRT_3,
         }
     }
 
-    fn load_svg(ctx: &egui::Context, svg_bytes: &[u8], id: &str) -> egui::TextureHandle {
-        let fontdb = Database::new();
-        let rtree = Tree::from_data(svg_bytes, &Options::default(), &fontdb).expect("Failed to parse SVG");
-        let pixmap_size = rtree.size().to_int_size();
-        let mut pixmap = Pixmap::new(pixmap_size.width(), pixmap_size.height())
-            .expect("Failed to create pixmap");
-
-        resvg::render(
-            &rtree,
-            Transform::default(),
-            &mut pixmap.as_mut(),
-        );
-
-        let image_data = pixmap.data().to_vec();
-        let color_image = egui::ColorImage::from_rgba_unmultiplied(
-            [pixmap.width() as usize, pixmap.height() as usize],
-            &image_data,
-        );
-
-        ctx.load_texture(id, color_image, egui::TextureOptions::LINEAR)
-    }
-
-    pub fn calculate_offsets(&mut self, board: &board::Board) {
-        let current_board_hash = board.calculate_hash();
-        if self.last_board_hash == current_board_hash {
-            return; // ボードの状態が変わっていなければ再計算しない
-        }
-        self.last_board_hash = current_board_hash;
-
+    pub fn calculate_offsets(&mut self, board: &Board) {
         let mut min_x = f32::MAX;
         let mut max_x = f32::MIN;
         let mut min_y = f32::MAX;
         let mut max_y = f32::MIN;
-        let size = HEX_DRAW_SIZE;
 
-        for (hex, _state) in &board.cells {
-            let (px, py) = self.hex_to_pixel(*hex, size);
-            let (final_px, final_py) = self.transform_no_offset(px, py, size);
-            min_x = min_x.min(final_px);
-            max_x = max_x.max(final_px);
-            min_y = min_y.min(final_py);
-            max_y = max_y.max(final_py);
+        // Iterate through all possible hexes for the given board size
+        for q in -board.size..=board.size {
+            for r in (-board.size).max(-q - board.size)..=board.size.min(-q + board.size) {
+                let hex = Hex { q, r };
+                let pixel_pos = self.transform_no_offset(hex);
+                min_x = min_x.min(pixel_pos.x);
+                max_x = max_x.max(pixel_pos.x);
+                min_y = min_y.min(pixel_pos.y);
+                max_y = max_y.max(pixel_pos.y);
+            }
         }
 
-        self.x_offset = (BOARD_AREA_SIZE - (max_x - min_x)) / 2.0 - min_x + X_OFFSET_ADJUSTMENT;
-        self.y_offset = (BOARD_AREA_SIZE - (max_y - min_y)) / 2.0 - min_y;
+        let board_width = max_x - min_x + self.hex_size * SQRT_3; // Add hex width to boundaries
+        let board_height = max_y - min_y + self.hex_size * 2.0; // Add hex height to boundaries
+
+        // Assuming we want to center it within a default window size for now
+        // These values should eventually come from the UI's available_size().
+        // For now, hardcode to match main.rs default window size.
+        let window_width = 800.0;
+        let window_height = 600.0;
+
+        self.x_offset = (window_width - board_width) / 2.0 - min_x;
+        self.y_offset = (window_height - board_height) / 2.0 - min_y;
     }
 
     pub fn render_board(&mut self, ui: &mut Ui, game: &mut Game) -> Option<Hex> {
-        let (_rect, response) = ui.allocate_exact_size(egui::Vec2::new(BOARD_AREA_SIZE, BOARD_AREA_SIZE), Sense::click());
+        let (response, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click());
         let mut clicked_hex: Option<Hex> = None;
 
-        for (hex, state) in &game.board.cells {
-            let (px, py) = self.hex_to_pixel(*hex, HEX_DRAW_SIZE);
-            let (final_px, final_py) = self.transform(px, py, HEX_DRAW_SIZE);
-            let center = egui::pos2(final_px, final_py);
-
-            let texture_to_draw = match state {
-                board::CellState::Empty => &self.empty_texture,
-                board::CellState::Red => &self.red_texture,
-                board::CellState::Blue => &self.blue_texture,
-            };
-
-            let image_size = egui::Vec2::new(HEX_DRAW_SIZE * 2.0, HEX_DRAW_SIZE * 2.0); // Adjust size as needed
-            let image_x = center.x - image_size.x / 2.0;
-            let image_y = center.y - image_size.y / 2.0;
-            let image_rect = egui::Rect::from_min_size(egui::pos2(image_x, image_y), image_size);
-
-            ui.painter().image(
-                texture_to_draw.id(),
-                image_rect,
-                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), // UV coordinates
-                egui::Color32::WHITE,
-            );
+        if response.clicked() {
+            if let Some(mouse_pos) = ui.input(|i| i.pointer.latest_pos()) { // Correct way to get mouse position
+                let hex = self.pixel_to_hex_no_offset(mouse_pos);
+                // Check if the clicked hex is actually on the board and is a valid move
+                if game.board.cells.contains_key(&hex) && game.board.is_valid_move(&hex) {
+                    clicked_hex = Some(hex);
+                }
+            }
         }
 
-        if response.clicked() {
-            if let Some(pos) = response.hover_pos() {
-                let (inv_px, inv_py) = self.inverse_transform(pos.x, pos.y, HEX_DRAW_SIZE);
-                clicked_hex = Some(self.pixel_to_hex_no_offset(inv_px, inv_py, HEX_DRAW_SIZE));
+        for (hex, cell_state) in game.board.cells.iter() {
+            let center_pixel_pos = self.transform_no_offset(*hex);
+            let center_pixel_pos_with_offset = self.transform(center_pixel_pos);
+
+            // Define the vertices of a hexagon (pointy top)
+            let mut points: Vec<egui::Pos2> = Vec::with_capacity(6);
+            for i in 0..6 {
+                let angle_rad = (PI / 3.0) * i as f32; // Angles for pointy top hex
+                let x = center_pixel_pos_with_offset.x + self.hex_size * angle_rad.cos();
+                let y = center_pixel_pos_with_offset.y + self.hex_size * angle_rad.sin(); // Corrected for y axis
+                points.push(egui::pos2(x, y));
             }
+
+            let color = match cell_state {
+                CellState::Empty => egui::Color32::from_gray(50),
+                CellState::Red => egui::Color32::RED,
+                CellState::Blue => egui::Color32::BLUE,
+            };
+
+            painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::new(1.0, egui::Color32::GRAY)));
         }
         clicked_hex
     }
 
-    fn transform_no_offset(&self, px: f32, py: f32, size: f32) -> (f32, f32) {
-        let pivot_hex = board::Hex { q: 5, r: 5 };
-        let (pivot_px, pivot_py) = self.hex_to_pixel(pivot_hex, size);
-        let angle_rad = -60.0f32.to_radians();
-        let cos_angle = angle_rad.cos();
-        let sin_angle = angle_rad.sin();
-        
-        let rel_px = px - pivot_px;
-        let rel_py = py - pivot_py;
-
-        let rotated_px = rel_px * cos_angle - rel_py * sin_angle;
-        let rotated_py = rel_px * sin_angle + rel_py * cos_angle;
-
-        (rotated_px + pivot_px, rotated_py + pivot_py)
+    // Converts axial hex coordinates to pixel coordinates without applying any global offset.
+    fn transform_no_offset(&self, hex: Hex) -> egui::Pos2 {
+        let x = self.hex_size * (SQRT_3 * hex.q as f32 + SQRT_3 / 2.0 * hex.r as f32);
+        let y = self.hex_size * (3.0 / 2.0 * hex.r as f32);
+        egui::Pos2::new(x, y)
     }
 
-    fn transform(&self, px: f32, py: f32, size: f32) -> (f32, f32) {
-        let (transformed_px, transformed_py) = self.transform_no_offset(px, py, size);
-        (transformed_px + self.x_offset, transformed_py + self.y_offset)
+    // Applies global offset to pixel coordinates.
+    fn transform(&self, pos: egui::Pos2) -> egui::Pos2 {
+        egui::Pos2::new(pos.x + self.x_offset, pos.y + self.y_offset)
     }
 
-    fn inverse_transform(&self, px: f32, py: f32, size: f32) -> (f32, f32) {
-        let pivot_hex = board::Hex { q: 5, r: 5 };
-        let (pivot_px, pivot_py) = self.hex_to_pixel(pivot_hex, size);
-        let angle_rad = 60.0f32.to_radians();
-        let cos_angle = angle_rad.cos();
-        let sin_angle = angle_rad.sin();
-
-        let rel_px = (px - self.x_offset) - pivot_px;
-        let rel_py = (py - self.y_offset) - pivot_py;
-
-        let rotated_px = rel_px * cos_angle - rel_py * sin_angle;
-        let rotated_py = rel_px * sin_angle + rel_py * cos_angle;
-
-        (rotated_px + pivot_px, rotated_py + pivot_py)
+    // Removes global offset from pixel coordinates.
+    fn inverse_transform(&self, pixel_pos: egui::Pos2) -> egui::Pos2 {
+        egui::Pos2::new(pixel_pos.x - self.x_offset, pixel_pos.y - self.y_offset)
     }
 
-    fn hex_to_pixel(&self, hex: board::Hex, size: f32) -> (f32, f32) {
-        let x = size * (3.0 / 2.0 * hex.q as f32);
-        let y = size * (f32::sqrt(3.0) / 2.0 * hex.q as f32 + f32::sqrt(3.0) * hex.r as f32);
-        (x, y)
+    // Converts pixel coordinates (without global offset) to floating-point axial hex coordinates.
+    fn pixel_to_hex_float_no_offset(&self, pixel_pos_no_offset: egui::Pos2) -> (f32, f32) {
+        let q_float = (pixel_pos_no_offset.x * SQRT_3 / 3.0 - pixel_pos_no_offset.y / 3.0) / self.hex_size;
+        let r_float = (pixel_pos_no_offset.y * 2.0 / 3.0) / self.hex_size;
+        (q_float, r_float)
     }
 
-    fn pixel_to_hex_no_offset(&self, px: f32, py: f32, size: f32) -> board::Hex {
-        let q = (2.0 / 3.0 * px) / size;
-        let r = (-1.0 / 3.0 * px + f32::sqrt(3.0) / 3.0 * py) / size;
-        self.hex_round(q, r)
-    }
+    // Rounds floating-point axial hex coordinates to the nearest integer axial hex coordinates.
+    fn hex_round(&self, q_float: f32, r_float: f32) -> Hex {
+        let mut q = q_float.round();
+        let mut r = r_float.round();
+        let s = (-q_float - r_float).round();
 
-    fn hex_round(&self, q: f32, r: f32) -> board::Hex {
-        let s = -q - r;
-        let mut rq = q.round();
-        let mut rr = r.round();
-        let rs = s.round();
-
-        let q_diff = (rq - q).abs();
-        let r_diff = (rr - r).abs();
-        let s_diff = (rs - s).abs();
+        let q_diff = (q - q_float).abs();
+        let r_diff = (r - r_float).abs();
+        let s_diff = (s - (-q_float - r_float)).abs();
 
         if q_diff > r_diff && q_diff > s_diff {
-            rq = -rr - rs;
+            q = (-r - s).round();
         } else if r_diff > s_diff {
-            rr = -rq - rs;
+            r = (-q - s).round();
         }
 
-        board::Hex { q: rq as i32, r: rr as i32 }
+        Hex { q: q as i32, r: r as i32 }
+    }
+
+    // Combines inverse_transform and pixel_to_hex_float_no_offset and hex_round.
+    fn pixel_to_hex_no_offset(&self, pixel_pos: egui::Pos2) -> Hex {
+        let no_offset_pixel = self.inverse_transform(pixel_pos);
+        let (q_float, r_float) = self.pixel_to_hex_float_no_offset(no_offset_pixel);
+        self.hex_round(q_float, r_float)
     }
 }
