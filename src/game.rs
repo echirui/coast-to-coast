@@ -1,4 +1,3 @@
-
 use std::collections::{HashSet, VecDeque};
 use crate::board::{Board, CellState, Hex};
 
@@ -134,6 +133,84 @@ impl Game {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_red_wins() {
+        let mut game = Game::new();
+        game.board = Board::new(3); // Use a smaller board for testing
+        game.current_player = CellState::Red;
+
+        // Create a winning path for Red player (q=0 to q=2)
+        game.board.set_cell(Hex { q: 0, r: 1 }, CellState::Red);
+        game.board.set_cell(Hex { q: 1, r: 1 }, CellState::Red);
+        game.board.set_cell(Hex { q: 2, r: 1 }, CellState::Red);
+        
+        assert!(game.check_win_condition());
+    }
+
+    #[test]
+    fn test_blue_wins() {
+        let mut game = Game::new();
+        game.board = Board::new(3);
+        game.current_player = CellState::Blue;
+
+        // Create a winning path for Blue player (r=0 to r=2)
+        game.board.set_cell(Hex { q: 1, r: 0 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 1, r: 1 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 1, r: 2 }, CellState::Blue);
+
+        assert!(game.check_win_condition());
+    }
+
+    #[test]
+    fn test_no_win() {
+        let mut game = Game::new();
+        game.board = Board::new(3);
+
+        // Red's turn, but no winning path
+        game.current_player = CellState::Red;
+        game.board.set_cell(Hex { q: 0, r: 1 }, CellState::Red);
+        game.board.set_cell(Hex { q: 2, r: 1 }, CellState::Red);
+        assert!(!game.check_win_condition());
+
+        // Blue's turn, but no winning path
+        game.current_player = CellState::Blue;
+        game.board.set_cell(Hex { q: 1, r: 0 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 1, r: 2 }, CellState::Blue);
+        assert!(!game.check_win_condition());
+    }
+
+    #[test]
+    fn test_red_wins_zigzag() {
+        let mut game = Game::new();
+        game.board = Board::new(4);
+        game.current_player = CellState::Red;
+
+        // Create a zigzag winning path for Red player (q=0 to q=3)
+        game.board.set_cell(Hex { q: 0, r: 1 }, CellState::Red);
+        game.board.set_cell(Hex { q: 1, r: 0 }, CellState::Red);
+        game.board.set_cell(Hex { q: 1, r: 1 }, CellState::Red);
+        game.board.set_cell(Hex { q: 2, r: 1 }, CellState::Red);
+        game.board.set_cell(Hex { q: 3, r: 0 }, CellState::Red);
+
+        assert!(game.check_win_condition());
+    }
+
+    #[test]
+    fn test_blue_wins_zigzag() {
+        let mut game = Game::new();
+        game.board = Board::new(4);
+        game.current_player = CellState::Blue;
+
+        // Create a zigzag winning path for Blue player (r=0 to r=3)
+        game.board.set_cell(Hex { q: 1, r: 0 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 0, r: 1 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 1, r: 1 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 1, r: 2 }, CellState::Blue);
+        game.board.set_cell(Hex { q: 0, r: 3 }, CellState::Blue);
+
+        assert!(game.check_win_condition());
+    }
 
     #[test]
     fn test_new_game_state() {
