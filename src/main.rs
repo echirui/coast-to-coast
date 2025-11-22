@@ -24,11 +24,7 @@ struct MyApp {
     board_renderer: renderer::BoardRenderer,
 }
 
-impl Default for MyApp {
-    fn default() -> Self {
-        panic!("MyApp::new(cc: &eframe::CreationContext<'_>) must be called");
-    }
-}
+
 
 impl MyApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
