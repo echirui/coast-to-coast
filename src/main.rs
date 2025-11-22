@@ -1,4 +1,5 @@
 use eframe::{self, egui};
+use egui_extras;
 
 const DEFAULT_WINDOW_WIDTH: f32 = 800.0;
 const DEFAULT_WINDOW_HEIGHT: f32 = 600.0;
@@ -28,6 +29,7 @@ struct MyApp {
 
 impl MyApp {
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        egui_extras::install_image_loaders(&cc.egui_ctx);
         Self {
             game: game::Game::new(),
             board_renderer: renderer::BoardRenderer::new(&cc.egui_ctx),

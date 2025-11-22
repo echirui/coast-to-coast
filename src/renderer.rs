@@ -1,7 +1,6 @@
 use eframe::egui::{self, Context, Ui};
 use crate::board::{Board, CellState, Hex};
 use crate::game::{Game, HEX_DRAW_SIZE};
-use std::f32::consts::PI;
 
 const SQRT_3: f32 = 1.7320508; // Approximately sqrt(3)
 
@@ -52,7 +51,7 @@ impl BoardRenderer {
     }
 
     pub fn render_board(&mut self, ui: &mut Ui, game: &Game) -> Option<Hex> {
-        let (response, painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click());
+        let (response, _painter) = ui.allocate_painter(ui.available_size(), egui::Sense::click());
         let mut clicked_hex: Option<Hex> = None;
 
         if response.clicked() {
@@ -68,21 +67,16 @@ impl BoardRenderer {
             let center_pixel_pos = self.transform_no_offset(*hex);
             let center_pixel_pos_with_offset = self.transform(center_pixel_pos);
 
-            let mut points: Vec<egui::Pos2> = Vec::with_capacity(6);
-            for i in 0..6 {
-                let angle_rad = (PI / 3.0) * i as f32;
-                let x = center_pixel_pos_with_offset.x + self.hex_size * angle_rad.cos();
-                let y = center_pixel_pos_with_offset.y + self.hex_size * angle_rad.sin();
-                points.push(egui::pos2(x, y));
-            }
-
-            let color = match cell_state {
-                CellState::Empty => egui::Color32::from_gray(50),
-                CellState::Red => egui::Color32::RED,
-                CellState::Blue => egui::Color32::BLUE,
+            let image = match cell_state {
+                CellState::Empty => egui::Image::new(egui::include_image!("../assets/hexagon_empty.svg")),
+                CellState::Red => egui::Image::new(egui::include_image!("../assets/hexagon_red.svg")),
+                CellState::Blue => egui::Image::new(egui::include_image!("../assets/hexagon_blue.svg")),
             };
 
-            painter.add(egui::Shape::convex_polygon(points, color, egui::Stroke::new(1.0, egui::Color32::GRAY)));
+            let image_size = egui::Vec2::splat(self.hex_size * 2.0); // Adjust size as needed
+            let image_rect = egui::Rect::from_center_size(center_pixel_pos_with_offset, image_size);
+
+            ui.put(image_rect, image.fit_to_exact_size(image_size));
         }
         clicked_hex
     }

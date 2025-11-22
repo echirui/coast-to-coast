@@ -50,6 +50,18 @@ issueのタイトルと本文は日本語で記述してください。
 3. issue登録後、一時ファイルを削除します。
    `rm tmp/issue_body.md`
 
+### `gh`コマンドの利用
+
+`gh`コマンドで複数行の本文（`--body`）を渡すと、シェルが誤って解釈する可能性があります。
+複数行のテキストを渡す場合は、常に`--body-file`オプションを使用してください。
+
+1.  本文を一時ファイルに書き込みます。
+    `write_file(content="<本文>", file_path="tmp/body.txt")`
+2.  一時ファイルを指定してコマンドを実行します。
+    `gh pr comment <PR番号> --body-file tmp/body.txt`
+3.  コマンド実行後、一時ファイルを削除します。
+    `rm tmp/body.txt`
+
 ### Issueの運用
 
 親Issue（例：`#4 Hexゲームの実装`）に記載されたタスクは、小項目ごとに子Issueを作成して管理します。
