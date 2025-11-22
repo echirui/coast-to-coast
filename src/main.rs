@@ -58,6 +58,17 @@ impl eframe::App for MyApp {
                         self.game.handle_click(clicked_hex);
                     }
                 }
+                game::GameState::WaitingForPieRuleChoice => {
+                    ui.label("Would you like to apply the pie rule?");
+                    ui.horizontal(|ui| {
+                        if ui.button("Apply Pie Rule").clicked() {
+                            self.game.handle_pie_rule_decision(true);
+                        }
+                        if ui.button("Continue Normal Play").clicked() {
+                            self.game.handle_pie_rule_decision(false);
+                        }
+                    });
+                }
             }
         });
     }
